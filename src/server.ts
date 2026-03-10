@@ -185,6 +185,72 @@ app.put("/users/:id", async (req, res) => {
 });
 
 // ────────────────────────────────────────────
+// ADMIN
+// ────────────────────────────────────────────
+
+// Lister tous les utilisateurs (pour l'admin)
+app.get("/admin/users", async (req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      include: { proProfile: true },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json(users);
+  } catch (e) { res.status(400).json({ error: "Erreur liste utilisateurs" }); }
+});
+
+// Supprimer un compte (accès admin)
+app.delete("/admin/users/:id", async (req, res) => {
+  try {
+    await prisma.user.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (e) { res.status(400).json({ error: "Erreur suppression compte" }); }
+});
+
+// Aussi accessible via /users/:id
+app.delete("/users/:id", async (req, res) => {
+  try {
+    await prisma.user.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (e) { res.status(400).json({ error: "Erreur suppression compte" }); }
+});
+
+// Certifier / décertifier un pro
+app.patch("/pros/:id/certify", async (req, res) => {
+  try {
+    const { certified } = req.body;
+    const pro = await prisma.proProfile.update({ where: { id: req.params.id }, data: { isCertified: certified } });
+    res.json(pro);
+  } catch (e) { res.status(400).json({ error: "Erreur certification" }); }
+});
+
+app.patch("/admin/pros/:id/certify", async (req, res) => {
+  try {
+    const { certified } = req.body;
+    const pro = await prisma.proProfile.update({ where: { id: req.params.id }, data: { isCertified: certified } });
+    res.json(pro);
+  } catch (e) { res.status(400).json({ error: "Erreur certification" }); }
+});
+
+// Changer le niveau d'un pro
+app.patch("/admin/pros/:id/level", async (req, res) => {
+  try {
+    const { level } = req.body;
+    const pro = await prisma.proProfile.update({ where: { id: req.params.id }, data: { level } });
+    res.json(pro);
+  } catch (e) { res.status(400).json({ error: "Erreur niveau" }); }
+});
+
+// Modifier un utilisateur (admin)
+app.put("/admin/users/:id", async (req, res) => {
+  try {
+    const { name, email, role, city } = req.body;
+    const user = await prisma.user.update({ where: { id: req.params.id }, data: { name, email, role, city } });
+    res.json(user);
+  } catch (e) { res.status(400).json({ error: "Erreur modification utilisateur" }); }
+});
+
+// ────────────────────────────────────────────
 // REVIEWS
 // ────────────────────────────────────────────
 
