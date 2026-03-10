@@ -128,12 +128,36 @@ app.put("/users/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { name, city, region, department, bio, websiteUrl, types, specialties, avatarUrl, photoUrl1, photoUrl2, photoUrl3, videoUrl1, videoUrl2, age, priceClip, priceStudio, priceMix, priceInstrumental, pricePhoto, address, siret } = req.body;
+
+    // Vérifier si l'utilisateur a un profil PRO
+    const existingUser = await prisma.user.findUnique({ where: { id }, include: { proProfile: true } });
+    const hasProProfile = !!existingUser?.proProfile;
+
+    const updateData: any = {
+      name, age: age ? Number(age) : undefined, avatarUrl, department, city, address,
+      siret: siret || undefined,
+    };
+
+    if (hasProProfile) {
+      updateData.proProfile = {
+        update: {
+          city, department, region, bio, websiteUrl,
+          siret: siret || undefined,
+          types: types ? JSON.stringify(types) : undefined,
+          specialties: specialties ? JSON.stringify(specialties) : undefined,
+          photoUrl1, photoUrl2, photoUrl3, videoUrl1, videoUrl2,
+          priceClip: priceClip ? Number(priceClip) : undefined,
+          priceStudio: priceStudio ? Number(priceStudio) : undefined,
+          priceMix: priceMix ? Number(priceMix) : undefined,
+          priceInstrumental: priceInstrumental ? Number(priceInstrumental) : undefined,
+          pricePhoto: pricePhoto ? Number(pricePhoto) : undefined,
+        }
+      };
+    }
+
     const user = await prisma.user.update({
-      where: { id }, data: {
-        name, age: age ? Number(age) : undefined, avatarUrl, department, city, address,
-        siret: siret || undefined,
-        proProfile: { update: { city, department, region, bio, websiteUrl, siret: siret || undefined, types: types ? JSON.stringify(types) : undefined, specialties: specialties ? JSON.stringify(specialties) : undefined, photoUrl1, photoUrl2, photoUrl3, videoUrl1, videoUrl2, priceClip: priceClip ? Number(priceClip) : undefined, priceStudio: priceStudio ? Number(priceStudio) : undefined, priceMix: priceMix ? Number(priceMix) : undefined, priceInstrumental: priceInstrumental ? Number(priceInstrumental) : undefined, pricePhoto: pricePhoto ? Number(pricePhoto) : undefined } }
-      },
+      where: { id },
+      data: updateData,
       include: { proProfile: true }
     });
     res.json(user);
