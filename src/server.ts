@@ -12,6 +12,25 @@ app.use(express.json());
 // AUTH
 // ────────────────────────────────────────────
 
+// Création compte Admin (route protégée par mot de passe secret)
+app.post("/auth/create-admin", async (req, res) => {
+  try {
+    const { email, password, name, secret } = req.body;
+    if (secret !== "shootpro-admin-2026") return res.status(403).json({ error: "Secret invalide" });
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      const updated = await prisma.user.update({ where: { email }, data: { role: "ADMIN" } });
+      return res.json({ id: updated.id, name: updated.name, role: updated.role, email: updated.email });
+    }
+    const user = await prisma.user.create({
+      data: { email, password, name: name || "Admin", role: "ADMIN" }
+    });
+    res.json({ id: user.id, name: user.name, role: user.role, email: user.email });
+  } catch (e: any) {
+    res.status(400).json({ error: "Erreur création admin" });
+  }
+});
+
 // Inscription Client
 app.post("/auth/register-client", async (req, res) => {
   try {
