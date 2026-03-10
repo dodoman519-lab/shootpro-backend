@@ -220,6 +220,10 @@ app.post("/chats", async (req, res) => {
       },
       include: { messages: true }
     });
+    // Notifier le pro de la nouvelle prise de contact
+    await prisma.notification.create({
+      data: { userId: proId, type: 'MESSAGE', message: `Nouveau message de ${senderName || 'un client'}`, link: '/account' }
+    }).catch(() => { });
     res.json(chat);
   } catch (e) { console.error(e); res.status(400).json({ error: "Erreur création chat" }); }
 });
