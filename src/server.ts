@@ -165,10 +165,40 @@ app.put("/users/:id", async (req, res) => {
           const { name, city, region, department, bio, websiteUrl, types, specialties, avatarUrl, photoUrl1, photoUrl2, photoUrl3, videoUrl1, videoUrl2, age, priceClip, priceStudio, priceMix, priceInstrumental, pricePhoto, address, siret } = req.body;
           const existingUser = await prisma.user.findUnique({ where: { id }, include: { proProfile: true } });
           const hasProProfile = !!existingUser?.proProfile;
-          const updateData: any = { name, age: age ? Number(age) : undefined, avatarUrl, department, city, address, siret: siret || undefined };
+          const updateData: any = { 
+              name, 
+              age: age !== undefined ? (age === "" ? null : Number(age)) : undefined, 
+              avatarUrl: avatarUrl !== undefined ? avatarUrl : undefined, 
+              department: department !== undefined ? department : undefined, 
+              city: city !== undefined ? city : undefined, 
+              address: address !== undefined ? address : undefined, 
+              siret: siret !== undefined ? siret : undefined 
+          };
           if (hasProProfile) {
+              const numOrNull = (val: any) => val !== undefined ? (val === "" ? null : Number(val)) : undefined;
+              const strOrUndefined = (val: any) => val !== undefined ? val : undefined;
+              
               updateData.proProfile = {
-                  update: { city, department, region, bio, websiteUrl, siret: siret || undefined, types: types ? JSON.stringify(types) : undefined, specialties: specialties ? JSON.stringify(specialties) : undefined, photoUrl1, photoUrl2, photoUrl3, videoUrl1, videoUrl2, priceClip: priceClip ? Number(priceClip) : undefined, priceStudio: priceStudio ? Number(priceStudio) : undefined, priceMix: priceMix ? Number(priceMix) : undefined, priceInstrumental: priceInstrumental ? Number(priceInstrumental) : undefined, pricePhoto: pricePhoto ? Number(pricePhoto) : undefined }
+                  update: { 
+                      city: strOrUndefined(city), 
+                      department: strOrUndefined(department), 
+                      region: strOrUndefined(region), 
+                      bio: strOrUndefined(bio), 
+                      websiteUrl: strOrUndefined(websiteUrl), 
+                      siret: strOrUndefined(siret), 
+                      types: types !== undefined ? JSON.stringify(types) : undefined, 
+                      specialties: specialties !== undefined ? JSON.stringify(specialties) : undefined, 
+                      photoUrl1: strOrUndefined(photoUrl1), 
+                      photoUrl2: strOrUndefined(photoUrl2), 
+                      photoUrl3: strOrUndefined(photoUrl3), 
+                      videoUrl1: strOrUndefined(videoUrl1), 
+                      videoUrl2: strOrUndefined(videoUrl2), 
+                      priceClip: numOrNull(priceClip), 
+                      priceStudio: numOrNull(priceStudio), 
+                      priceMix: numOrNull(priceMix), 
+                      priceInstrumental: numOrNull(priceInstrumental), 
+                      pricePhoto: numOrNull(pricePhoto) 
+                  }
               };
           }
           const user = await prisma.user.update({ where: { id }, data: updateData, include: { proProfile: true } });
