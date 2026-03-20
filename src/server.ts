@@ -6,8 +6,15 @@ import * as admin from "firebase-admin";
 // --- Firebase Admin Init ---
 if (!admin.apps.length) {
     const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
-      ? (() => { const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT!); if (sa.private_key) sa.private_key = sa.private_key.replace(/\\\\n/g, String.fromCharCode(10)); return sa; })()
-          : (() => { try { return require('../firebase-service-account.json'); } catch { return null; } })();
+      ? (() => {
+            const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT!);
+            // Remplace les \n littéraux (stockés en tant que "\\n" dans les env vars Render) par de vrais sauts de ligne
+            if (sa.private_key) {
+                sa.private_key = sa.private_key.replace(/\\n/g, '\n');
+            }
+            return sa;
+        })()
+      : (() => { try { return require('../firebase-service-account.json'); } catch { return null; } })();
     if (serviceAccount) {
           admin.initializeApp({
                   credential: admin.credential.cert(serviceAccount)
