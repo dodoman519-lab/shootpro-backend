@@ -1,5 +1,5 @@
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -21,6 +21,7 @@ model User {
   siret        String?   // numéro SIRET (optionnel)
   isOnline     Boolean   @default(false)
   lastSeen     DateTime?
+  fcmToken     String?   // Firebase Cloud Messaging token
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -209,4 +210,14 @@ model Internship {
   authorName         String
   authorAge          Int?
   createdAt          DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────
+// APP CONFIG : version APK + lien de téléchargement
+// ─────────────────────────────────────────────────────────
+model AppConfig {
+  id             String   @id @default(cuid())
+  key            String   @unique
+  value          String
+  updatedAt      DateTime @updatedAt
 }
