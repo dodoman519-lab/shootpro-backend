@@ -1,5 +1,5 @@
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -18,10 +18,10 @@ model User {
   department   String?
   city         String?
   address      String?
-  siret        String?   // numéro SIRET (optionnel)
+  siret        String?
   isOnline     Boolean   @default(false)
   lastSeen     DateTime?
-  fcmToken     String?   // Firebase Cloud Messaging token
+  fcmToken     String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -57,19 +57,16 @@ model ProProfile {
   likesCount    Int     @default(0)
   profileViews  Int     @default(0)
   completedJobs Int     @default(0)
-  photoUrl1     String?  // URL ou base64
+  photoUrl1     String?
   photoUrl2     String?
   photoUrl3     String?
   videoUrl1     String?
   videoUrl2     String?
-
-  // Tarifs par prestation
   priceClip           Int?
   priceStudio         Int?
   priceMix            Int?
   priceInstrumental   Int?
   pricePhoto          Int?
-
   createdAt     DateTime @default(now())
 
   portfolioItems PortfolioItem[]
@@ -78,7 +75,6 @@ model ProProfile {
   availability   Availability[]
   bookings       Booking[]
 }
-
 model PortfolioItem {
   id           String     @id @default(cuid())
   proProfile   ProProfile @relation(fields: [proProfileId], references: [id], onDelete: Cascade)
@@ -142,14 +138,13 @@ model Contract {
   status      String   @default("PENDING")
   createdAt   DateTime @default(now())
 }
-
 model Availability {
   id           String     @id @default(cuid())
   proProfile   ProProfile @relation(fields: [proProfileId], references: [id], onDelete: Cascade)
   proProfileId String
   date         String
-  startTime    String?    // ex: "09:00"
-  endTime      String?    // ex: "17:00"
+  startTime    String?
+  endTime      String?
   label        String?
   isBooked     Boolean    @default(false)
   bookings     Booking[]
@@ -159,10 +154,10 @@ model Notification {
   id        String   @id @default(cuid())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
-  type      String   // "MESSAGE", "BOOKING", "CONTRACT"
+  type      String
   message   String
   isRead    Boolean  @default(false)
-  link      String?  // URL de redirection
+  link      String?
   createdAt DateTime @default(now())
 }
 
@@ -203,9 +198,9 @@ model Internship {
   department         String?
   startDate          String
   endDate            String
-  conventionPdf      String?  // base64 du fichier PDF
+  conventionPdf      String?
   conventionFileName String?
-  reportPdf          String?  // base64 du fichier PDF
+  reportPdf          String?
   reportFileName     String?
   authorName         String
   authorAge          Int?
@@ -217,5 +212,4 @@ model AppConfig {
   key            String   @unique
   value          String
   updatedAt      DateTime @updatedAt
-}
 }
