@@ -1,33 +1,36 @@
 import express from "express";
 import cors from "cors";
 import { PrismaClient } from "@prisma/client";
-import * as admin from "firebase-admin";
-
-// ─── Firebase Admin Init ────────────────────────────────────────────
-// Charge le service account depuis variable d'environnement ou fichier local
-if (!admin.apps.length) {
-  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
-    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-    : (() => { try { return require('../firebase-service-account.json'); } catch { return null; } })();
-  if (serviceAccount) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
-    });
-    console.log('✅ Firebase Admin initialisé');
-  } else {
-    console.warn('⚠️  Firebase Service Account non trouvé – notifications push désactivées');
-  }
-}
 
 const app = express();
 const prisma = new PrismaClient();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // ────────────────────────────────────────────
 // AUTH
 // ────────────────────────────────────────────
+
+// Création compte Admin (route protégée par mot de passe secret)
+app.post("/auth/create-admin", async (req, res) => {
+  try {
+    const { email, password, name, secret } = req.body;
+    if (secret !== "shootpro-admin-2026") return res.status(403).json({ error: "Secret invalide" });
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      const updated = await prisma.user.update({ where: { email }, data: { role: "ADMIN" } });
+      return res.json({ id: updated.id, name: updated.name, role: updated.role, email: updated.email });
+    }
+    const user = await prisma.user.create({
+      data: { email, password, name: name || "Admin", role: "ADMIN" }
+    });
+    res.json({ id: user.id, name: user.name, role: user.role, email: user.email });
+  } catch (e: any) {
+    res.status(400).json({ error: "Erreur création admin" });
+  }
+});
 
 // Inscription Client
 app.post("/auth/register-client", async (req, res) => {
@@ -141,29 +144,110 @@ app.get("/users/:id", async (req, res) => {
   } catch (e) { res.status(400).json({ error: "Erreur récupération utilisateur" }); }
 });
 
-// ─── Enregistrer / mettre à jour le token FCM ───────────────────────
-app.post("/users/:id/fcm-token", async (req, res) => {
-  try {
-    const { fcmToken } = req.body;
-    await prisma.user.update({ where: { id: req.params.id }, data: { fcmToken } });
-    res.json({ ok: true });
-  } catch (e) { res.status(400).json({ error: 'Erreur sauvegarde token FCM' }); }
-});
-
 app.put("/users/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { name, city, region, department, bio, websiteUrl, types, specialties, avatarUrl, photoUrl1, photoUrl2, photoUrl3, videoUrl1, videoUrl2, age, priceClip, priceStudio, priceMix, priceInstrumental, pricePhoto, address, siret } = req.body;
+
+    // Vérifier si l'utilisateur a un profil PRO
+    const existingUser = await prisma.user.findUnique({ where: { id }, include: { proProfile: true } });
+    const hasProProfile = !!existingUser?.proProfile;
+
+    const updateData: any = {
+      name, age: age ? Number(age) : undefined, avatarUrl, department, city, address,
+      siret: siret || undefined,
+    };
+
+    if (hasProProfile) {
+      updateData.proProfile = {
+        update: {
+          city, department, region, bio, websiteUrl,
+          siret: siret || undefined,
+          types: types ? JSON.stringify(types) : undefined,
+          specialties: specialties ? JSON.stringify(specialties) : undefined,
+          photoUrl1, photoUrl2, photoUrl3, videoUrl1, videoUrl2,
+          priceClip: priceClip ? Number(priceClip) : undefined,
+          priceStudio: priceStudio ? Number(priceStudio) : undefined,
+          priceMix: priceMix ? Number(priceMix) : undefined,
+          priceInstrumental: priceInstrumental ? Number(priceInstrumental) : undefined,
+          pricePhoto: pricePhoto ? Number(pricePhoto) : undefined,
+        }
+      };
+    }
+
     const user = await prisma.user.update({
-      where: { id }, data: {
-        name, age: age ? Number(age) : undefined, avatarUrl, department, city, address,
-        siret: siret || undefined,
-        proProfile: { update: { city, department, region, bio, websiteUrl, siret: siret || undefined, types: types ? JSON.stringify(types) : undefined, specialties: specialties ? JSON.stringify(specialties) : undefined, photoUrl1, photoUrl2, photoUrl3, videoUrl1, videoUrl2, priceClip: priceClip ? Number(priceClip) : undefined, priceStudio: priceStudio ? Number(priceStudio) : undefined, priceMix: priceMix ? Number(priceMix) : undefined, priceInstrumental: priceInstrumental ? Number(priceInstrumental) : undefined, pricePhoto: pricePhoto ? Number(pricePhoto) : undefined } }
-      },
+      where: { id },
+      data: updateData,
       include: { proProfile: true }
     });
     res.json(user);
   } catch (e) { console.error(e); res.status(400).json({ error: "Erreur mise à jour compte" }); }
+});
+
+// ────────────────────────────────────────────
+// ADMIN
+// ────────────────────────────────────────────
+
+// Lister tous les utilisateurs (pour l'admin)
+app.get("/admin/users", async (req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      include: { proProfile: true },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json(users);
+  } catch (e) { res.status(400).json({ error: "Erreur liste utilisateurs" }); }
+});
+
+// Supprimer un compte (accès admin)
+app.delete("/admin/users/:id", async (req, res) => {
+  try {
+    await prisma.user.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (e) { res.status(400).json({ error: "Erreur suppression compte" }); }
+});
+
+// Aussi accessible via /users/:id
+app.delete("/users/:id", async (req, res) => {
+  try {
+    await prisma.user.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (e) { res.status(400).json({ error: "Erreur suppression compte" }); }
+});
+
+// Certifier / décertifier un pro
+app.patch("/pros/:id/certify", async (req, res) => {
+  try {
+    const { certified } = req.body;
+    const pro = await prisma.proProfile.update({ where: { id: req.params.id }, data: { isCertified: certified } });
+    res.json(pro);
+  } catch (e) { res.status(400).json({ error: "Erreur certification" }); }
+});
+
+app.patch("/admin/pros/:id/certify", async (req, res) => {
+  try {
+    const { certified } = req.body;
+    const pro = await prisma.proProfile.update({ where: { id: req.params.id }, data: { isCertified: certified } });
+    res.json(pro);
+  } catch (e) { res.status(400).json({ error: "Erreur certification" }); }
+});
+
+// Changer le niveau d'un pro
+app.patch("/admin/pros/:id/level", async (req, res) => {
+  try {
+    const { level } = req.body;
+    const pro = await prisma.proProfile.update({ where: { id: req.params.id }, data: { level } });
+    res.json(pro);
+  } catch (e) { res.status(400).json({ error: "Erreur niveau" }); }
+});
+
+// Modifier un utilisateur (admin)
+app.put("/admin/users/:id", async (req, res) => {
+  try {
+    const { name, email, role, city } = req.body;
+    const user = await prisma.user.update({ where: { id: req.params.id }, data: { name, email, role, city } });
+    res.json(user);
+  } catch (e) { res.status(400).json({ error: "Erreur modification utilisateur" }); }
 });
 
 // ────────────────────────────────────────────
@@ -203,6 +287,10 @@ app.post("/chats", async (req, res) => {
       },
       include: { messages: true }
     });
+    // Notifier le pro de la nouvelle prise de contact
+    await prisma.notification.create({
+      data: { userId: proId, type: 'MESSAGE', message: `Nouveau message de ${senderName || 'un client'}`, link: '/account' }
+    }).catch(() => { });
     res.json(chat);
   } catch (e) { console.error(e); res.status(400).json({ error: "Erreur création chat" }); }
 });
@@ -218,43 +306,11 @@ app.post("/chats/:chatRoomId/messages", async (req, res) => {
   try {
     const { senderId, senderName, content } = req.body;
     const msg = await prisma.message.create({ data: { chatRoomId: req.params.chatRoomId, senderId, senderName: senderName || "Utilisateur", content } });
-
-    // Créer une notification DB + envoyer notif Firebase au destinataire
+    // Créer une notification pour le destinataire
     const room = await prisma.chatRoom.findUnique({ where: { id: req.params.chatRoomId } });
     if (room) {
       const recipientId = room.clientId === senderId ? room.proId : room.clientId;
-      // Notification en base
-      await prisma.notification.create({ data: { userId: recipientId, type: 'MESSAGE', message: `Nouveau message de ${senderName || 'quelqu\'un'}`, link: `/messages/${req.params.chatRoomId}` } }).catch(() => { });
-      // Envoi FCM push notification
-      const recipient = await prisma.user.findUnique({ where: { id: recipientId }, select: { fcmToken: true } });
-      if (recipient?.fcmToken && admin.apps.length) {
-        try {
-          await admin.messaging().send({
-            token: recipient.fcmToken,
-            notification: {
-              title: `💬 ${senderName || 'Nouveau message'}`,
-              body: content.length > 100 ? content.substring(0, 100) + '...' : content,
-            },
-            data: {
-              type: 'MESSAGE',
-              chatRoomId: req.params.chatRoomId,
-              senderId,
-            },
-            android: {
-              priority: 'high',
-              notification: { sound: 'default', channelId: 'messages' }
-            }
-          });
-          console.log(`📲 Notification FCM envoyée à ${recipientId}`);
-        } catch (fcmErr: any) {
-          // Token expiré ou invalide → on le supprime
-          if (fcmErr.code === 'messaging/invalid-registration-token' ||
-              fcmErr.code === 'messaging/registration-token-not-registered') {
-            await prisma.user.update({ where: { id: recipientId }, data: { fcmToken: null } }).catch(() => {});
-          }
-          console.warn('FCM error:', fcmErr.message);
-        }
-      }
+      await prisma.notification.create({ data: { userId: recipientId, type: 'MESSAGE', message: `Nouveau message de ${senderName || 'quelqu\'un'}`, link: '/account' } }).catch(() => { });
     }
     res.json(msg);
   } catch (e) { res.status(400).json({ error: "Erreur envoi message" }); }
@@ -298,6 +354,13 @@ app.patch("/contracts/:id/status", async (req, res) => {
     const contract = await prisma.contract.update({ where: { id: req.params.id }, data: { status } });
     res.json(contract);
   } catch (e) { res.status(400).json({ error: "Erreur mise à jour contrat" }); }
+});
+
+app.delete("/contracts/:id", async (req, res) => {
+  try {
+    await prisma.contract.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(400).json({ error: "Erreur suppression contrat" }); }
 });
 
 // ────────────────────────────────────────────
@@ -410,6 +473,13 @@ app.post("/internships", async (req, res) => {
   } catch (e) { res.status(400).json({ error: "Erreur création stage" }); }
 });
 
+app.delete("/internships/:id", async (req, res) => {
+  try {
+    await prisma.internship.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (e) { res.status(400).json({ error: "Erreur suppression stage" }); }
+});
+
 // ────────────────────────────────────────────
 // MATÉRIEL
 // ────────────────────────────────────────────
@@ -420,15 +490,27 @@ app.get("/gear", async (req, res) => {
     const where: any = {};
     if (city) where.city = String(city);
     if (region) where.region = String(region);
-    res.json(await prisma.gearListing.findMany({ where, include: { owner: true } }));
+    res.json(await prisma.gearListing.findMany({ where, include: { owner: { select: { id: true, name: true, avatarUrl: true } } }, orderBy: { createdAt: 'desc' } }));
   } catch (e) { res.status(400).json({ error: "Erreur matériel" }); }
 });
 
 app.post("/gear", async (req, res) => {
   try {
-    const { ownerId, title, description, pricePerDay, priceSell, isForRent, isForSale, city, region } = req.body;
-    res.json(await prisma.gearListing.create({ data: { ownerId, title, description, pricePerDay, priceSell, isForRent, isForSale, city, region } }));
-  } catch (e) { res.status(400).json({ error: "Erreur création matériel" }); }
+    const { ownerId, title, description, pricePerDay, priceSell, isForRent, isForSale, city, region, imageUrl } = req.body;
+    if (!ownerId) return res.status(400).json({ error: "ownerId requis" });
+    const item = await prisma.gearListing.create({
+      data: { ownerId, title, description, pricePerDay: pricePerDay ? Number(pricePerDay) : undefined, priceSell: priceSell ? Number(priceSell) : undefined, isForRent: !!isForRent, isForSale: !!isForSale, city: city || '', region: region || '', imageUrl: imageUrl || undefined },
+      include: { owner: { select: { id: true, name: true } } }
+    });
+    res.json(item);
+  } catch (e: any) { console.error(e); res.status(400).json({ error: e.message || "Erreur création matériel" }); }
+});
+
+app.delete("/gear/:id", async (req, res) => {
+  try {
+    await prisma.gearListing.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (e) { res.status(400).json({ error: "Erreur suppression matériel" }); }
 });
 
 // ────────────────────────────────────────────
@@ -501,45 +583,4 @@ app.get("/admin/stats", async (req, res) => {
   } catch (e) { res.status(400).json({ error: "Erreur stats" }); }
 });
 
-// ─────────────────────────────────────────────────────────
-// APP CONFIG : version + lien de téléchargement APK
-// ─────────────────────────────────────────────────────────
-
-// GET config publique (version + apk_url)
-app.get("/app-config", async (_req, res) => {
-  try {
-    const configs = await prisma.appConfig.findMany();
-    const result: Record<string, string> = {};
-    configs.forEach(c => { result[c.key] = c.value; });
-    res.json(result);
-  } catch (e) { res.status(400).json({ error: 'Erreur config' }); }
-});
-
-// POST/PUT config (admin seulement)
-app.put("/admin/app-config", async (req, res) => {
-  try {
-    const { key, value } = req.body;
-    const config = await prisma.appConfig.upsert({
-      where: { key },
-      update: { value },
-      create: { key, value }
-    });
-    res.json(config);
-  } catch (e) { res.status(400).json({ error: 'Erreur mise à jour config' }); }
-});
-
-// Initialiser les valeurs par défaut si inexistantes
-async function initAppConfig() {
-  const defaults = [
-    { key: 'latest_version', value: '1.0.0' },
-    { key: 'apk_url', value: 'https://shoot-pro.fr/app/shootpro-v1.0.0.apk' },
-    { key: 'update_required', value: 'false' },
-  ];
-  for (const d of defaults) {
-    await prisma.appConfig.upsert({ where: { key: d.key }, update: {}, create: { key: d.key, value: d.value } }).catch(() => {});
-  }
-  console.log('✅ AppConfig initialisé');
-}
-
-initAppConfig();
 app.listen(4000, () => console.log("ShootPro API running on http://localhost:4000"));
