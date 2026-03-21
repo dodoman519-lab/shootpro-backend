@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import cors from "cors";
 import { PrismaClient } from "@prisma/client";
 import * as admin from "firebase-admin";
@@ -6,15 +6,8 @@ import * as admin from "firebase-admin";
 // --- Firebase Admin Init ---
 if (!admin.apps.length) {
     const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
-      ? (() => {
-            const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT!);
-            // Remplace les \n littéraux (stockés en tant que "\\n" dans les env vars Render) par de vrais sauts de ligne
-            if (sa.private_key) {
-                sa.private_key = sa.private_key.replace(/\\n/g, '\n');
-            }
-            return sa;
-        })()
-      : (() => { try { return require('../firebase-service-account.json'); } catch { return null; } })();
+      ? JS(() => { const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT!); if (sa.private_key) sa.private_key = sa.private_key.replace(/\\\\n/g, String.fromCharCode(10)); return sa; })()
+          : (() => { try { return require('../firebase-service-account.json'); } catch { return null; } })();
     if (serviceAccount) {
           admin.initializeApp({
                   credential: admin.credential.cert(serviceAccount)
@@ -29,28 +22,9 @@ const app = express();
 const prisma = new PrismaClient();
 
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use(express.json());
 
 // --- AUTH ---
-
-app.post("/auth/create-admin", async (req, res) => {
-    try {
-        const { email, password, name, secret } = req.body;
-        if (secret !== "shootpro-admin-2026") return res.status(403).json({ error: "Secret invalide" });
-        const existing = await prisma.user.findUnique({ where: { email } });
-        if (existing) {
-            const updated = await prisma.user.update({ where: { email }, data: { role: "ADMIN" } });
-            return res.json({ id: updated.id, name: updated.name, role: updated.role, email: updated.email });
-        }
-        const user = await prisma.user.create({
-            data: { email, password, name: name || "Admin", role: "ADMIN" }
-        });
-        res.json({ id: user.id, name: user.name, role: user.role, email: user.email });
-    } catch (e: any) {
-        res.status(400).json({ error: "Erreur création admin" });
-    }
-});
 
 app.post("/auth/register-client", async (req, res) => {
     try {
@@ -59,7 +33,7 @@ app.post("/auth/register-client", async (req, res) => {
                   data: { email, password, name, role: "CLIENT", age: age ? Number(age) : undefined, department, city, address }
           });
           res.json({ id: user.id, name: user.name, role: user.role, email: user.email });
-    } catch (e: any) {
+    } catch (e) {
           if (e.code === "P2002") return res.status(400).json({ error: "Email deja utilise" });
           res.status(400).json({ error: "Erreur inscription" });
     }
@@ -78,7 +52,7 @@ app.post("/auth/register-pro", async (req, res) => {
                   include: { proProfile: true }
           });
           res.json({ id: user.id, name: user.name, role: user.role, email: user.email });
-    } catch (e: any) {
+    } catch (e) {
           if (e.code === "P2002") return res.status(400).json({ error: "Email deja utilise" });
           res.status(400).json({ error: "Erreur inscription pro" });
     }
@@ -112,7 +86,6 @@ app.get("/pros", async (req, res) => {
           res.json(pros);
     } catch (e) { res.status(400).json({ error: "Erreur recherche" }); }
 });
-
 app.post("/pros/:id/like", async (req, res) => {
     try {
           const pro = await prisma.proProfile.update({ where: { id: req.params.id }, data: { likesCount: { increment: 1 } } });
@@ -162,58 +135,16 @@ app.post("/users/:id/fcm-token", async (req, res) => {
 app.put("/users/:id", async (req, res) => {
     try {
           const { id } = req.params;
-          const { name, prenom, date_naissance, telephone, city, region, department, bio, websiteUrl, types, specialties, avatarUrl, photoUrl1, photoUrl2, photoUrl3, videoUrl1, videoUrl2, age, priceClip, priceStudio, priceMix, priceInstrumental, pricePhoto, address, siret } = req.body;
-          const existingUser = await prisma.user.findUnique({ where: { id }, include: { proProfile: true } });
-          const hasProProfile = !!existingUser?.proProfile;
-          const updateData: any = { 
-              name, 
-              prenom: prenom !== undefined ? prenom : undefined,
-              date_naissance: date_naissance !== undefined ? date_naissance : undefined,
-              telephone: telephone !== undefined ? telephone : undefined,
-              age: age !== undefined ? (age === "" ? null : Number(age)) : undefined, 
-              avatarUrl: avatarUrl !== undefined ? avatarUrl : undefined, 
-              department: department !== undefined ? department : undefined, 
-              city: city !== undefined ? city : undefined, 
-              address: address !== undefined ? address : undefined, 
-              siret: siret !== undefined ? siret : undefined 
-          };
-          if (hasProProfile) {
-              const numOrNull = (val: any) => val !== undefined ? (val === "" ? null : Number(val)) : undefined;
-              const strOrUndefined = (val: any) => val !== undefined ? val : undefined;
-              
-              updateData.proProfile = {
-                  update: { 
-                      city: strOrUndefined(city), 
-                      department: strOrUndefined(department), 
-                      region: strOrUndefined(region), 
-                      bio: strOrUndefined(bio), 
-                      websiteUrl: strOrUndefined(websiteUrl), 
-                      siret: strOrUndefined(siret), 
-                      types: types !== undefined ? JSON.stringify(types) : undefined, 
-                      specialties: specialties !== undefined ? JSON.stringify(specialties) : undefined, 
-                      photoUrl1: strOrUndefined(photoUrl1), 
-                      photoUrl2: strOrUndefined(photoUrl2), 
-                      photoUrl3: strOrUndefined(photoUrl3), 
-                      videoUrl1: strOrUndefined(videoUrl1), 
-                      videoUrl2: strOrUndefined(videoUrl2), 
-                      priceClip: numOrNull(priceClip), 
-                      priceStudio: numOrNull(priceStudio), 
-                      priceMix: numOrNull(priceMix), 
-                      priceInstrumental: numOrNull(priceInstrumental), 
-                      pricePhoto: numOrNull(pricePhoto) 
-                  }
-              };
-          }
-          const user = await prisma.user.update({ where: { id }, data: updateData, include: { proProfile: true } });
+          const { name, city, region, department, bio, websiteUrl, types, specialties, avatarUrl, photoUrl1, photoUrl2, photoUrl3, videoUrl1, videoUrl2, age, priceClip, priceStudio, priceMix, priceInstrumental, pricePhoto, address, siret } = req.body;
+          const user = await prisma.user.update({
+                  where: { id }, data: {
+                            name, age: age ? Number(age) : undefined, avatarUrl, department, city, address, siret: siret || undefined,
+                            proProfile: { update: { city, department, region, bio, websiteUrl, siret: siret || undefined, types: types ? JSON.stringify(types) : undefined, specialties: specialties ? JSON.stringify(specialties) : undefined, photoUrl1, photoUrl2, photoUrl3, videoUrl1, videoUrl2, priceClip: priceClip ? Number(priceClip) : undefined, priceStudio: priceStudio ? Number(priceStudio) : undefined, priceMix: priceMix ? Number(priceMix) : undefined, priceInstrumental: priceInstrumental ? Number(priceInstrumental) : undefined, pricePhoto: pricePhoto ? Number(pricePhoto) : undefined } }
+                  },
+                  include: { proProfile: true }
+          });
           res.json(user);
-    } catch (e) { console.error(e); res.status(400).json({ error: "Erreur mise a jour compte" }); }
-});
-
-app.delete("/users/:id", async (req, res) => {
-    try {
-        await prisma.user.delete({ where: { id: req.params.id } });
-        res.json({ success: true });
-    } catch (e) { res.status(400).json({ error: "Erreur suppression compte" }); }
+    } catch (e) { res.status(400).json({ error: "Erreur mise a jour compte" }); }
 });
 
 // --- REVIEWS ---
@@ -227,7 +158,6 @@ app.post("/pros/:id/reviews", async (req, res) => {
           res.json(review);
     } catch (e) { res.status(400).json({ error: "Erreur avis" }); }
 });
-
 // --- MESSAGERIE ---
 
 app.post("/chats", async (req, res) => {
@@ -245,11 +175,8 @@ app.post("/chats", async (req, res) => {
                   data: { clientId, proId, messages: firstMessage ? { create: { senderId: clientId, senderName: senderName || "Vous", content: firstMessage } } : undefined },
                   include: { messages: true }
           });
-          await prisma.notification.create({
-              data: { userId: proId, type: 'MESSAGE', message: `Nouveau message de ${senderName || 'un client'}`, link: '/account' }
-          }).catch(() => {});
           res.json(chat);
-    } catch (e) { console.error(e); res.status(400).json({ error: "Erreur creation chat" }); }
+    } catch (e) { res.status(400).json({ error: "Erreur creation chat" }); }
 });
 
 app.get("/chats/:chatRoomId/messages", async (req, res) => {
@@ -266,8 +193,7 @@ app.post("/chats/:chatRoomId/messages", async (req, res) => {
           const room = await prisma.chatRoom.findUnique({ where: { id: req.params.chatRoomId } });
           if (room) {
                   const recipientId = room.clientId === senderId ? room.proId : room.clientId;
-                  await prisma.notification.create({ data: { userId: recipientId, type: "MESSAGE", message: `Nouveau message de ${senderName || "quelqu'un"}`, link: `/messages/${req.params.chatRoomId}` } }).catch(() => {});
-                  // Push FCM
+                  await prisma.notification.create({ data: { userId: recipientId, type: "MESSAGE", message: `Nouveau message de ${senderName || "quelqu'un"}`, link: `/messages/${req.params.chatRoomId}` } }).catch(() => { });
                   const recipient = await prisma.user.findUnique({ where: { id: recipientId }, select: { fcmToken: true } });
                   if (recipient?.fcmToken && admin.apps.length) {
                             try {
@@ -277,8 +203,8 @@ app.post("/chats/:chatRoomId/messages", async (req, res) => {
                                                       data: { type: "MESSAGE", chatRoomId: req.params.chatRoomId, senderId },
                                                       android: { priority: "high", notification: { sound: "default", channelId: "messages" } }
                                         });
-                                        console.log(`[PUSH] FCM sent to ${recipientId}`);
-                            } catch (fcmErr: any) {
+                                        console.log(`[PUSH] Notification FCM envoyee a ${recipientId}`);
+                            } catch (fcmErr) {
                                         if (fcmErr.code === "messaging/invalid-registration-token" || fcmErr.code === "messaging/registration-token-not-registered") {
                                                       await prisma.user.update({ where: { id: recipientId }, data: { fcmToken: null } }).catch(() => {});
                                         }
@@ -298,7 +224,6 @@ app.get("/chats/user/:userId", async (req, res) => {
           res.json(rooms);
     } catch (e) { res.status(400).json({ error: "Erreur conversations" }); }
 });
-
 // --- CONTRATS ---
 
 app.post("/contracts", async (req, res) => {
@@ -306,7 +231,7 @@ app.post("/contracts", async (req, res) => {
           const { proId, clientId, title, description, address, price, eventDate } = req.body;
           const contract = await prisma.contract.create({ data: { proId, clientId, title, description, address, price: Number(price), eventDate } });
           res.json(contract);
-    } catch (e) { console.error(e); res.status(400).json({ error: "Erreur creation contrat" }); }
+    } catch (e) { res.status(400).json({ error: "Erreur creation contrat" }); }
 });
 
 app.get("/contracts/user/:userId", async (req, res) => {
@@ -325,13 +250,6 @@ app.patch("/contracts/:id/status", async (req, res) => {
           const contract = await prisma.contract.update({ where: { id: req.params.id }, data: { status } });
           res.json(contract);
     } catch (e) { res.status(400).json({ error: "Erreur mise a jour contrat" }); }
-});
-
-app.delete("/contracts/:id", async (req, res) => {
-    try {
-        await prisma.contract.delete({ where: { id: req.params.id } });
-        res.json({ success: true });
-    } catch (e) { console.error(e); res.status(400).json({ error: "Erreur suppression contrat" }); }
 });
 
 // --- AGENDA ---
@@ -395,7 +313,6 @@ app.patch("/notifications/read-all/:userId", async (req, res) => {
           res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: "Erreur" }); }
 });
-
 // --- RESERVATIONS ---
 
 app.post("/bookings", async (req, res) => {
@@ -429,19 +346,12 @@ app.get("/internships", async (req, res) => {
 
 app.post("/internships", async (req, res) => {
     try {
-          const { title, description, city, region, department, startDate, endDate, conventionPdf, conventionFileName, reportPdf, reportFileName, authorName, authorAge, userId } = req.body;
-          res.json(await prisma.internship.create({ data: { title, description, city, region: region || '', department, startDate, endDate, conventionPdf, conventionFileName, reportPdf, reportFileName, authorName, authorAge: authorAge ? Number(authorAge) : undefined, userId: userId || undefined } }));
+          const { title, description, city, region, department, startDate, endDate, conventionPdf, conventionFileName, reportPdf, reportFileName, authorName, authorAge } = req.body;
+          res.json(await prisma.internship.create({ data: { title, description, city, region: region || '', department, startDate, endDate, conventionPdf, conventionFileName, reportPdf, reportFileName, authorName, authorAge: authorAge ? Number(authorAge) : undefined } }));
     } catch (e) { res.status(400).json({ error: "Erreur creation stage" }); }
 });
 
-app.delete("/internships/:id", async (req, res) => {
-    try {
-        await prisma.internship.delete({ where: { id: req.params.id } });
-        res.json({ success: true });
-    } catch (e) { res.status(400).json({ error: "Erreur suppression stage" }); }
-});
-
-// --- MATERIEL (GEAR) ---  ← BUG CORRIGÉ : ownerId obligatoire + imageUrl + suppression
+// --- MATERIEL ---
 
 app.get("/gear", async (req, res) => {
     try {
@@ -449,27 +359,15 @@ app.get("/gear", async (req, res) => {
           const where: any = {};
           if (city) where.city = String(city);
           if (region) where.region = String(region);
-          res.json(await prisma.gearListing.findMany({ where, include: { owner: { select: { id: true, name: true, avatarUrl: true } } }, orderBy: { createdAt: 'desc' } }));
+          res.json(await prisma.gearListing.findMany({ where, include: { owner: true } }));
     } catch (e) { res.status(400).json({ error: "Erreur materiel" }); }
 });
 
 app.post("/gear", async (req, res) => {
     try {
-          const { ownerId, title, description, pricePerDay, priceSell, isForRent, isForSale, city, region, imageUrl } = req.body;
-          if (!ownerId) return res.status(400).json({ error: "ownerId requis" });
-          const item = await prisma.gearListing.create({
-              data: { ownerId, title, description, pricePerDay: pricePerDay ? Number(pricePerDay) : undefined, priceSell: priceSell ? Number(priceSell) : undefined, isForRent: !!isForRent, isForSale: !!isForSale, city: city || '', region: region || '', imageUrl: imageUrl || undefined },
-              include: { owner: { select: { id: true, name: true } } }
-          });
-          res.json(item);
-    } catch (e: any) { console.error(e); res.status(400).json({ error: e.message || "Erreur creation materiel" }); }
-});
-
-app.delete("/gear/:id", async (req, res) => {
-    try {
-          await prisma.gearListing.delete({ where: { id: req.params.id } });
-          res.json({ success: true });
-    } catch (e) { res.status(400).json({ error: "Erreur suppression materiel" }); }
+          const { ownerId, title, description, pricePerDay, priceSell, isForRent, isForSale, city, region } = req.body;
+          res.json(await prisma.gearListing.create({ data: { ownerId, title, description, pricePerDay, priceSell, isForRent, isForSale, city, region } }));
+    } catch (e) { res.status(400).json({ error: "Erreur creation materiel" }); }
 });
 
 // --- HUB PRO ---
@@ -491,23 +389,9 @@ app.patch("/admin/pros/:id/certify", async (req, res) => {
     } catch (e) { res.status(400).json({ error: "Erreur certification" }); }
 });
 
-app.patch("/pros/:id/certify", async (req, res) => {
-    try {
-          const { certified } = req.body;
-          res.json(await prisma.proProfile.update({ where: { id: req.params.id }, data: { isCertified: certified } }));
-    } catch (e) { res.status(400).json({ error: "Erreur certification" }); }
-});
-
 app.patch("/admin/pros/:id/level", async (req, res) => {
     try {
           res.json(await prisma.proProfile.update({ where: { id: req.params.id }, data: { level: String(req.body.level) } }));
-    } catch (e) { res.status(400).json({ error: "Erreur niveau" }); }
-});
-
-app.patch("/pros/:id/level", async (req, res) => {
-    try {
-          const { level } = req.body;
-          res.json(await prisma.proProfile.update({ where: { id: req.params.id }, data: { level } }));
     } catch (e) { res.status(400).json({ error: "Erreur niveau" }); }
 });
 

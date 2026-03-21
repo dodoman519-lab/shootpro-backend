@@ -135,10 +135,14 @@ app.post("/users/:id/fcm-token", async (req, res) => {
 app.put("/users/:id", async (req, res) => {
     try {
           const { id } = req.params;
-          const { name, city, region, department, bio, websiteUrl, types, specialties, avatarUrl, photoUrl1, photoUrl2, photoUrl3, videoUrl1, videoUrl2, age, priceClip, priceStudio, priceMix, priceInstrumental, pricePhoto, address, siret } = req.body;
+          const { name, prenom, date_naissance, telephone, city, region, department, bio, websiteUrl, types, specialties, avatarUrl, photoUrl1, photoUrl2, photoUrl3, videoUrl1, videoUrl2, age, priceClip, priceStudio, priceMix, priceInstrumental, pricePhoto, address, siret } = req.body;
           const user = await prisma.user.update({
                   where: { id }, data: {
-                            name, age: age ? Number(age) : undefined, avatarUrl, department, city, address, siret: siret || undefined,
+                            name,
+                            prenom: prenom !== undefined ? prenom : undefined,
+                            date_naissance: date_naissance !== undefined ? date_naissance : undefined,
+                            telephone: telephone !== undefined ? telephone : undefined,
+                            age: age ? Number(age) : undefined, avatarUrl, department, city, address, siret: siret || undefined,
                             proProfile: { update: { city, department, region, bio, websiteUrl, siret: siret || undefined, types: types ? JSON.stringify(types) : undefined, specialties: specialties ? JSON.stringify(specialties) : undefined, photoUrl1, photoUrl2, photoUrl3, videoUrl1, videoUrl2, priceClip: priceClip ? Number(priceClip) : undefined, priceStudio: priceStudio ? Number(priceStudio) : undefined, priceMix: priceMix ? Number(priceMix) : undefined, priceInstrumental: priceInstrumental ? Number(priceInstrumental) : undefined, pricePhoto: pricePhoto ? Number(pricePhoto) : undefined } }
                   },
                   include: { proProfile: true }
@@ -353,9 +357,16 @@ app.get("/internships", async (req, res) => {
 
 app.post("/internships", async (req, res) => {
     try {
-          const { title, description, city, region, department, startDate, endDate, conventionPdf, conventionFileName, reportPdf, reportFileName, authorName, authorAge } = req.body;
-          res.json(await prisma.internship.create({ data: { title, description, city, region: region || '', department, startDate, endDate, conventionPdf, conventionFileName, reportPdf, reportFileName, authorName, authorAge: authorAge ? Number(authorAge) : undefined } }));
+          const { title, description, city, region, department, startDate, endDate, conventionPdf, conventionFileName, reportPdf, reportFileName, authorName, authorAge, userId } = req.body;
+          res.json(await prisma.internship.create({ data: { title, description, city, region: region || '', department, startDate, endDate, conventionPdf, conventionFileName, reportPdf, reportFileName, authorName, authorAge: authorAge ? Number(authorAge) : undefined, userId: userId || undefined } }));
     } catch (e) { res.status(400).json({ error: "Erreur creation stage" }); }
+});
+
+app.delete("/internships/:id", async (req, res) => {
+    try {
+        await prisma.internship.delete({ where: { id: req.params.id } });
+        res.json({ success: true });
+    } catch (e) { res.status(400).json({ error: "Erreur suppression stage" }); }
 });
 
 // --- MATERIEL ---
