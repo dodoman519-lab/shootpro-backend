@@ -136,19 +136,45 @@ app.put("/users/:id", async (req, res) => {
     try {
           const { id } = req.params;
           const { name, prenom, date_naissance, telephone, city, region, department, bio, websiteUrl, types, specialties, avatarUrl, photoUrl1, photoUrl2, photoUrl3, videoUrl1, videoUrl2, age, priceClip, priceStudio, priceMix, priceInstrumental, pricePhoto, address, siret } = req.body;
-          const user = await prisma.user.update({
-                  where: { id }, data: {
-                            name,
-                            prenom: prenom !== undefined ? prenom : undefined,
-                            date_naissance: date_naissance !== undefined ? date_naissance : undefined,
-                            telephone: telephone !== undefined ? telephone : undefined,
-                            age: age ? Number(age) : undefined, avatarUrl, department, city, address, siret: siret || undefined,
-                            proProfile: { update: { city, department, region, bio, websiteUrl, siret: siret || undefined, types: types ? JSON.stringify(types) : undefined, specialties: specialties ? JSON.stringify(specialties) : undefined, photoUrl1, photoUrl2, photoUrl3, videoUrl1, videoUrl2, priceClip: priceClip ? Number(priceClip) : undefined, priceStudio: priceStudio ? Number(priceStudio) : undefined, priceMix: priceMix ? Number(priceMix) : undefined, priceInstrumental: priceInstrumental ? Number(priceInstrumental) : undefined, pricePhoto: pricePhoto ? Number(pricePhoto) : undefined } }
-                  },
-                  include: { proProfile: true }
-          });
+
+          // Vérifie si l'utilisateur a un profil pro avant de tenter une mise à jour du proProfile
+          const existingUser = await prisma.user.findUnique({ where: { id }, include: { proProfile: true } });
+          const hasProProfile = !!existingUser?.proProfile;
+
+          const updateData: any = {
+              name,
+              prenom: prenom !== undefined ? prenom : undefined,
+              date_naissance: date_naissance !== undefined ? date_naissance : undefined,
+              telephone: telephone !== undefined ? telephone : undefined,
+              age: age !== undefined ? (age === "" ? null : Number(age)) : undefined,
+              avatarUrl: avatarUrl !== undefined ? avatarUrl : undefined,
+              department: department !== undefined ? department : undefined,
+              city: city !== undefined ? city : undefined,
+              address: address !== undefined ? address : undefined,
+              siret: siret !== undefined ? siret : undefined,
+          };
+
+          if (hasProProfile) {
+              const numOrNull = (val: any) => val !== undefined ? (val === "" ? null : Number(val)) : undefined;
+              const strOrUnd = (val: any) => val !== undefined ? val : undefined;
+              updateData.proProfile = {
+                  update: {
+                      city: strOrUnd(city), department: strOrUnd(department), region: strOrUnd(region),
+                      bio: strOrUnd(bio), websiteUrl: strOrUnd(websiteUrl), siret: strOrUnd(siret),
+                      types: types !== undefined ? JSON.stringify(types) : undefined,
+                      specialties: specialties !== undefined ? JSON.stringify(specialties) : undefined,
+                      photoUrl1: strOrUnd(photoUrl1), photoUrl2: strOrUnd(photoUrl2), photoUrl3: strOrUnd(photoUrl3),
+                      videoUrl1: strOrUnd(videoUrl1), videoUrl2: strOrUnd(videoUrl2),
+                      priceClip: numOrNull(priceClip), priceStudio: numOrNull(priceStudio),
+                      priceMix: numOrNull(priceMix), priceInstrumental: numOrNull(priceInstrumental),
+                      pricePhoto: numOrNull(pricePhoto),
+                  }
+              };
+          }
+
+          const user = await prisma.user.update({ where: { id }, data: updateData, include: { proProfile: true } });
           res.json(user);
-    } catch (e) { res.status(400).json({ error: "Erreur mise a jour compte" }); }
+    } catch (e) { console.error(e); res.status(400).json({ error: "Erreur mise a jour compte" }); }
 });
 
 // --- REVIEWS ---
