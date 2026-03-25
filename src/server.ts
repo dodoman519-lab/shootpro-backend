@@ -98,23 +98,14 @@ app.post("/auth/login", async (req, res) => {
 app.get("/pros", async (req, res) => {
   try {
     const { city, region, type, specialty, level, sort, department, lat, lng } = req.query;
-    const where: any = {};
 
-    // Si géolocalisation active, on ignore city/region (filtre en mémoire après)
     const useGeo = lat && lng;
-    if (!useGeo) {
-      if (city) where.city = { contains: String(city) };
-      if (region) where.region = { contains: String(region) };
-      if (department) where.department = { contains: String(department) };
-    }
-    if (type) where.types = { contains: String(type) };
-    if (specialty) where.specialties = { contains: String(specialty) };
-    if (level) where.level = String(level);
 
+    // On sort d'abord tout (SQLite n'a pas de filtre insensible à la casse)
     const orderBy: any = sort === "rating" ? { avgRating: "desc" } : sort === "likes" ? { likesCount: "desc" } : { createdAt: "desc" };
 
     let pros: any[] = await prisma.proProfile.findMany({
-      where, orderBy,
+      orderBy,
       select: {
         id: true,
         userId: true,
@@ -137,7 +128,34 @@ app.get("/pros", async (req, res) => {
       }
     });
 
-    // Filtre géoloc par Haversine (rayon 100 km par défaut)
+    // ── Filtrage JS in-memory (insensible à la casse, SQLite ne supporte pas mode:'insensitive') ──
+    if (!useGeo) {
+      if (city) {
+        const c = String(city).toLowerCase().trim();
+        pros = pros.filter(p => p.city && p.city.toLowerCase().includes(c));
+      }
+      if (region) {
+        const r = String(region).toLowerCase().trim();
+        pros = pros.filter(p => p.region && p.region.toLowerCase().includes(r));
+      }
+      if (department) {
+        const d = String(department).toLowerCase().trim();
+        pros = pros.filter(p => p.department && p.department.toLowerCase().includes(d));
+      }
+    }
+    if (type) {
+      const t = String(type).toLowerCase().trim();
+      pros = pros.filter(p => p.types && p.types.toLowerCase().includes(t));
+    }
+    if (specialty) {
+      const s = String(specialty).toLowerCase().trim();
+      pros = pros.filter(p => p.specialties && p.specialties.toLowerCase().includes(s));
+    }
+    if (level) {
+      pros = pros.filter(p => p.level === String(level));
+    }
+
+    // ── Filtre géoloc par Haversine (rayon 100 km) ──
     if (useGeo) {
       const userLat = Number(lat);
       const userLng = Number(lng);
