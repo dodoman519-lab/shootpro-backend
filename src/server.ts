@@ -114,7 +114,26 @@ app.get("/pros", async (req, res) => {
 
     let pros: any[] = await prisma.proProfile.findMany({
       where, orderBy,
-      include: { user: true, services: true, portfolioItems: true }
+      select: {
+        id: true,
+        userId: true,
+        level: true,
+        types: true,
+        specialties: true,
+        city: true,
+        region: true,
+        department: true,
+        siret: true,
+        isCertified: true,
+        avgRating: true,
+        likesCount: true,
+        profileViews: true,
+        photoUrl1: true,
+        priceClip: true, priceStudio: true, priceMix: true, priceInstrumental: true, pricePhoto: true, customService: true, customPrice: true,
+        latitude: true, longitude: true,
+        user: { select: { id: true, name: true, avatarUrl: true } },
+        services: { select: { id: true, name: true, basePrice: true } }
+      }
     });
 
     // Filtre géoloc par Haversine (rayon 100 km par défaut)
