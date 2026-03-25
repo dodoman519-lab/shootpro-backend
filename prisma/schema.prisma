@@ -1,11 +1,10 @@
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "rhel-openssl-1.0.x", "rhel-openssl-3.0.x", "linux-musl", "linux-musl-openssl-3.0.x"]
+  provider = "prisma-client-js"
 }
 
 model User {
@@ -13,16 +12,16 @@ model User {
   email           String    @unique
   password        String
   name            String
-  prenom          String?   // prénom
-  date_naissance  String?   // date de naissance
-  telephone       String?   // téléphone
+  prenom          String?   // prénom (séparé du nom)
+  date_naissance  String?   // date de naissance (format string)
+  telephone       String?   // numéro de téléphone
   role            String    @default("CLIENT")
   age             Int?
   avatarUrl       String?
   department      String?
   city            String?
   address         String?
-  siret           String?
+  siret           String?   // numéro SIRET (optionnel)
   isOnline        Boolean   @default(false)
   lastSeen        DateTime?
   fcmToken        String?   // Firebase Cloud Messaging token
@@ -39,6 +38,7 @@ model User {
   bookings       Booking[]
   notifications  Notification[]
   internships    Internship[]
+  invoices       Invoice[]
 }
 
 model ProProfile {
@@ -62,16 +62,24 @@ model ProProfile {
   likesCount    Int     @default(0)
   profileViews  Int     @default(0)
   completedJobs Int     @default(0)
-  photoUrl1     String?
+  photoUrl1     String?  // URL ou base64
   photoUrl2     String?
   photoUrl3     String?
+  photoUrl4     String?
+  photoUrl5     String?
+  photoUrl6     String?
   videoUrl1     String?
   videoUrl2     String?
+
+  // Tarifs par prestation
   priceClip           Int?
   priceStudio         Int?
   priceMix            Int?
   priceInstrumental   Int?
   pricePhoto          Int?
+  customService       String?   // nom libre de prestation perso
+  customPrice         Int?      // tarif de la prestation perso
+
   createdAt     DateTime @default(now())
 
   portfolioItems PortfolioItem[]
@@ -131,18 +139,23 @@ model Message {
 }
 
 model Contract {
-  id          String   @id @default(cuid())
-  pro         User     @relation("SentContracts", fields: [proId], references: [id], onDelete: Cascade)
-  proId       String
-  client      User     @relation("ReceivedContracts", fields: [clientId], references: [id], onDelete: Cascade)
-  clientId    String
-  title       String
-  description String
-  address     String
-  price       Float
-  eventDate   String?
-  status      String   @default("PENDING")
-  createdAt   DateTime @default(now())
+  id            String   @id @default(cuid())
+  pro           User     @relation("SentContracts", fields: [proId], references: [id], onDelete: Cascade)
+  proId         String
+  client        User     @relation("ReceivedContracts", fields: [clientId], references: [id], onDelete: Cascade)
+  clientId      String
+  title         String
+  description   String
+  address       String
+  price         Float
+  eventDate     String?
+  eventTime     String?   // heure de la prestation
+  eventType     String?   // type: Mariage, Clip, DJ...
+  proName       String?   // nom+prénom du pro
+  proAddress    String?   // adresse du pro
+  clientAddress String?   // adresse du client
+  status        String   @default("PENDING")
+  createdAt     DateTime @default(now())
 }
 
 model Availability {
@@ -150,8 +163,8 @@ model Availability {
   proProfile   ProProfile @relation(fields: [proProfileId], references: [id], onDelete: Cascade)
   proProfileId String
   date         String
-  startTime    String?
-  endTime      String?
+  startTime    String?    // ex: "09:00"
+  endTime      String?    // ex: "17:00"
   label        String?
   isBooked     Boolean    @default(false)
   bookings     Booking[]
@@ -161,10 +174,10 @@ model Notification {
   id        String   @id @default(cuid())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
-  type      String
+  type      String   // "MESSAGE", "BOOKING", "CONTRACT"
   message   String
   isRead    Boolean  @default(false)
-  link      String?
+  link      String?  // URL de redirection
   createdAt DateTime @default(now())
 }
 
@@ -206,21 +219,48 @@ model Internship {
   department         String?
   startDate          String
   endDate            String
-  conventionPdf      String?
+  conventionPdf      String?  // base64 du fichier PDF
   conventionFileName String?
-  reportPdf          String?
+  reportPdf          String?  // base64 du fichier PDF
   reportFileName     String?
   authorName         String
   authorAge          Int?
-  userId             String?  // lien vers l'auteur pour suppression
+  userId             String?  // lien optionnel vers l'utilisateur auteur (pour la suppression)
   user               User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt          DateTime @default(now())
 }
 
+// ─────────────────────────────────────────────────────────
+// FACTURATION
+// ─────────────────────────────────────────────────────────
+model Invoice {
+  id             String   @id @default(cuid())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  number         String   // FAC-2026-0001
+  date           String
+  proName        String
+  proPrenom      String
+  proAddress     String
+  proSiret       String?
+  proTva         String?
+  proEmail       String?
+  clientName     String
+  clientAddress  String
+  clientEmail    String?
+  lines          String   // JSON: [{description, qty, unitPrice}]
+  tvaRate        Float    @default(20)
+  notes          String?
+  paymentTerms   String?
+  createdAt      DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────
 // APP CONFIG : version APK + lien de téléchargement
+// ─────────────────────────────────────────────────────────
 model AppConfig {
-  id        String   @id @default(cuid())
-  key       String   @unique
-  value     String
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(cuid())
+  key            String   @unique
+  value          String
+  updatedAt      DateTime @updatedAt
 }

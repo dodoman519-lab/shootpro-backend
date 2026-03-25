@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "build": "echo 'No build step required'",
-    "start": "npx prisma generate && tsx src/server.ts"
+    "start": "npx prisma db push && npx prisma generate && tsx src/server.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.10.2",
