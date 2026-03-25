@@ -62,11 +62,12 @@ app.post("/auth/register-client", async (req, res) => {
 app.post("/auth/register-pro", async (req, res) => {
   try {
     const { email, password, name, level, types, city, region, department, websiteUrl, siret, age } = req.body;
+    let coords = await geocodeCity(city, region);
     const user = await prisma.user.create({
       data: {
         email, password, name, role: "PRO", age: age ? Number(age) : undefined, department, city,
         proProfile: {
-          create: { level: level || "BEGINNER", types: JSON.stringify(types || []), city: city || "", region: region || "", department, websiteUrl, siret }
+          create: { level: level || "BEGINNER", types: JSON.stringify(types || []), city: city || "", region: region || "", department, websiteUrl, siret, latitude: coords?.lat, longitude: coords?.lon }
         }
       },
       include: { proProfile: true }
@@ -195,6 +196,9 @@ app.put("/users/:id", async (req, res) => {
     };
 
     if (hasProProfile) {
+      let coords = undefined;
+      if (city || region) coords = await geocodeCity(city, region);
+      
       updateData.proProfile = {
         update: {
           city, department, region, bio, websiteUrl,
@@ -209,6 +213,7 @@ app.put("/users/:id", async (req, res) => {
           pricePhoto: pricePhoto ? Number(pricePhoto) : undefined,
           customService: customService || undefined,
           customPrice: customPrice ? Number(customPrice) : undefined,
+          ...(coords ? { latitude: coords.lat, longitude: coords.lon } : {})
         }
       };
     }
