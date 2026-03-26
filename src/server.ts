@@ -21,6 +21,21 @@ app.use(cors());
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ limit: '20mb', extended: true }));
 
+// ── Geocode City ─────────────────────────────────────────────
+async function geocodeCity(city: string, region?: string): Promise<{ lat: number; lon: number } | null> {
+  const query = encodeURIComponent(`${city}, ${region || ''}, France`);
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`);
+    const data = await res.json();
+    if (data && data.length > 0) {
+      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    }
+  } catch(e) {
+    console.error("Erreur géo-codage pour", city, e);
+  }
+  return null;
+}
+
 // ────────────────────────────────────────────
 // AUTH
 // ────────────────────────────────────────────
@@ -209,7 +224,12 @@ app.put("/users/:id", async (req, res) => {
     const hasProProfile = !!existingUser?.proProfile;
 
     const updateData: any = {
-      name, age: age ? Number(age) : undefined, avatarUrl, department, city, address,
+      name, 
+      prenom: prenom !== undefined ? prenom : undefined,
+      date_naissance: date_naissance !== undefined ? date_naissance : undefined,
+      telephone: telephone !== undefined ? telephone : undefined,
+      age: age ? Number(age) : undefined, 
+      avatarUrl, department, city, address,
       siret: siret || undefined,
     };
 
