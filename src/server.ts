@@ -17,16 +17,12 @@ function haversine(lat1: number, lon1: number, lat2: number, lon2: number): numb
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-app.use(cors());
-app.use(express.json({ limit: '20mb' }));
-app.use(express.urlencoded({ limit: '20mb', extended: true }));
-
-// ── Geocode City ─────────────────────────────────────────────
-async function geocodeCity(city: string, region?: string): Promise<{ lat: number; lon: number } | null> {
+// ── Geocode City ─────────────────────────────────────────────────────────────
+async function geocodeCity(city: string, region: string): Promise<{lat: number, lon: number} | null> {
   const query = encodeURIComponent(`${city}, ${region || ''}, France`);
   try {
     const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`);
-    const data = await res.json();
+    const data = await res.json() as any;
     if (data && data.length > 0) {
       return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
     }
@@ -35,6 +31,10 @@ async function geocodeCity(city: string, region?: string): Promise<{ lat: number
   }
   return null;
 }
+
+app.use(cors());
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ limit: '20mb', extended: true }));
 
 // ────────────────────────────────────────────
 // AUTH
@@ -113,14 +113,23 @@ app.post("/auth/login", async (req, res) => {
 app.get("/pros", async (req, res) => {
   try {
     const { city, region, type, specialty, level, sort, department, lat, lng } = req.query;
+    const where: any = {};
 
+    // Si géolocalisation active, on ignore city/region (filtre en mémoire après)
     const useGeo = lat && lng;
+    if (!useGeo) {
+      if (city) where.city = { contains: String(city) };
+      if (region) where.region = { contains: String(region) };
+      if (department) where.department = { contains: String(department) };
+    }
+    if (type) where.types = { contains: String(type) };
+    if (specialty) where.specialties = { contains: String(specialty) };
+    if (level) where.level = String(level);
 
-    // On sort d'abord tout (SQLite n'a pas de filtre insensible à la casse)
     const orderBy: any = sort === "rating" ? { avgRating: "desc" } : sort === "likes" ? { likesCount: "desc" } : { createdAt: "desc" };
 
     let pros: any[] = await prisma.proProfile.findMany({
-      orderBy,
+      where, orderBy,
       select: {
         id: true,
         userId: true,
@@ -143,34 +152,7 @@ app.get("/pros", async (req, res) => {
       }
     });
 
-    // ── Filtrage JS in-memory (insensible à la casse, SQLite ne supporte pas mode:'insensitive') ──
-    if (!useGeo) {
-      if (city) {
-        const c = String(city).toLowerCase().trim();
-        pros = pros.filter(p => p.city && p.city.toLowerCase().includes(c));
-      }
-      if (region) {
-        const r = String(region).toLowerCase().trim();
-        pros = pros.filter(p => p.region && p.region.toLowerCase().includes(r));
-      }
-      if (department) {
-        const d = String(department).toLowerCase().trim();
-        pros = pros.filter(p => p.department && p.department.toLowerCase().includes(d));
-      }
-    }
-    if (type) {
-      const t = String(type).toLowerCase().trim();
-      pros = pros.filter(p => p.types && p.types.toLowerCase().includes(t));
-    }
-    if (specialty) {
-      const s = String(specialty).toLowerCase().trim();
-      pros = pros.filter(p => p.specialties && p.specialties.toLowerCase().includes(s));
-    }
-    if (level) {
-      pros = pros.filter(p => p.level === String(level));
-    }
-
-    // ── Filtre géoloc par Haversine (rayon 100 km) ──
+    // Filtre géoloc par Haversine (rayon 100 km par défaut)
     if (useGeo) {
       const userLat = Number(lat);
       const userLng = Number(lng);
@@ -224,12 +206,8 @@ app.put("/users/:id", async (req, res) => {
     const hasProProfile = !!existingUser?.proProfile;
 
     const updateData: any = {
-      name, 
-      prenom: prenom !== undefined ? prenom : undefined,
-      date_naissance: date_naissance !== undefined ? date_naissance : undefined,
-      telephone: telephone !== undefined ? telephone : undefined,
-      age: age ? Number(age) : undefined, 
-      avatarUrl, department, city, address,
+      name, prenom, date_naissance, telephone,
+      age: age ? Number(age) : undefined, avatarUrl, department, city, address,
       siret: siret || undefined,
     };
 
@@ -344,6 +322,32 @@ app.post("/pros/:id/reviews", async (req, res) => {
     res.json(review);
   } catch (e) { res.status(400).json({ error: "Erreur avis" }); }
 });
+
+// Avis sur l'application globale
+app.post("/app-reviews", async (req, res) => {
+  try {
+    const { authorId, rating, comment } = req.body;
+    if (!authorId) return res.status(400).json({ error: "authorId requis" });
+    const appReview = await prisma.appReview.create({
+      data: { authorId, rating, comment }
+    });
+    res.json(appReview);
+  } catch (e: any) { 
+    console.error(e);
+    res.status(400).json({ error: "Erreur création avis app" }); 
+  }
+});
+
+app.get("/app-reviews", async (req, res) => {
+  try {
+    const reviews = await prisma.appReview.findMany({
+      include: { author: { select: { id: true, name: true, avatarUrl: true } } },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json(reviews);
+  } catch (e) { res.status(400).json({ error: "Erreur récupération des avis de l'application" }); }
+});
+
 
 // ────────────────────────────────────────────
 // MESSAGERIE

@@ -40,6 +40,7 @@ model User {
   notifications  Notification[]
   internships    Internship[]
   invoices       Invoice[]
+  appReviews     AppReview[]
 }
 
 model ProProfile {
@@ -264,4 +265,16 @@ model AppConfig {
   key            String   @unique
   value          String
   updatedAt      DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────
+// AVIS APPLICATION
+// ─────────────────────────────────────────────────────────
+model AppReview {
+  id        String   @id @default(cuid())
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId  String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
 }

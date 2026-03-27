@@ -1,0 +1,24 @@
+# ─── Autoriser les méthodes HTTP DELETE, PUT, PATCH, OPTIONS ───────────────────
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Autoriser les requêtes OPTIONS (preflight CORS)
+    RewriteCond %{REQUEST_METHOD} OPTIONS
+    RewriteRule ^(.*)$ $1 [R=200,L]
+</IfModule>
+
+# ─── En-têtes CORS ─────────────────────────────────────────────────────────────
+<IfModule mod_headers.c>
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+    Header always set Access-Control-Max-Age "86400"
+</IfModule>
+
+# ─── Proxy vers le backend Node.js (port 4000) ─────────────────────────────────
+<IfModule mod_proxy.c>
+    ProxyRequests Off
+    ProxyPreserveHost On
+    ProxyPass / http://localhost:4000/
+    ProxyPassReverse / http://localhost:4000/
+</IfModule>
