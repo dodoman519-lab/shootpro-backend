@@ -33,8 +33,15 @@ async function geocodeCity(city: string, region: string): Promise<{lat: number, 
 }
 
 app.use(cors());
-app.use(express.json({ limit: '20mb' }));
-app.use(express.urlencoded({ limit: '20mb', extended: true }));
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ limit: '2mb', extended: true }));
+
+// ── Memory monitoring ────────────────────────────────────────────────────────
+setInterval(() => {
+  const mem = process.memoryUsage();
+  const mb = (b: number) => Math.round(b / 1024 / 1024);
+  console.log(`[MEM] RSS=${mb(mem.rss)}MB Heap=${mb(mem.heapUsed)}/${mb(mem.heapTotal)}MB`);
+}, 60_000);
 
 // ────────────────────────────────────────────
 // AUTH
@@ -599,58 +606,23 @@ app.delete("/gear/:id", async (req, res) => {
 });
 
 // ────────────────────────────────────────────
-// HUB PRO (in-memory pour démo)
+// HUB PRO (in-memory, limité à 100 messages max)
 // ────────────────────────────────────────────
 
+const MAX_HUB_MESSAGES = 100;
 const proHubMessages: any[] = [];
 app.get("/prohub/messages", (_req, res) => res.json(proHubMessages));
 app.post("/prohub/messages", (req, res) => {
   const msg = { id: Date.now().toString(), ...req.body, createdAt: new Date().toISOString() };
   proHubMessages.push(msg);
+  // Éviter la fuite mémoire : on garde seulement les MAX_HUB_MESSAGES derniers messages
+  if (proHubMessages.length > MAX_HUB_MESSAGES) {
+    proHubMessages.splice(0, proHubMessages.length - MAX_HUB_MESSAGES);
+  }
   res.json(msg);
 });
 
-// ────────────────────────────────────────────
-// ADMIN
-// ────────────────────────────────────────────
-
-app.patch("/admin/pros/:id/certify", async (req, res) => {
-  try {
-    const { certified } = req.body;
-    res.json(await prisma.proProfile.update({ where: { id: req.params.id }, data: { isCertified: certified !== false } }));
-  } catch (e) { res.status(400).json({ error: "Erreur certification" }); }
-});
-
-app.patch("/admin/pros/:id/level", async (req, res) => {
-  try {
-    res.json(await prisma.proProfile.update({ where: { id: req.params.id }, data: { level: String(req.body.level) } }));
-  } catch (e) { res.status(400).json({ error: "Erreur niveau" }); }
-});
-
-app.delete("/admin/users/:id", async (req, res) => {
-  try {
-    await prisma.user.delete({ where: { id: req.params.id } });
-    res.json({ success: true });
-  } catch (e) { res.status(400).json({ error: "Erreur suppression" }); }
-});
-
-app.put("/admin/users/:id", async (req, res) => {
-  try {
-    const { name, email, role, city } = req.body;
-    res.json(await prisma.user.update({ where: { id: req.params.id }, data: { name, email, role, city } }));
-  } catch (e) { res.status(400).json({ error: "Erreur modification" }); }
-});
-
-app.get("/admin/users", async (req, res) => {
-  try {
-    const users = await prisma.user.findMany({
-      where: { role: { not: 'ADMIN' } },
-      include: { proProfile: { select: { id: true, isCertified: true, level: true, avgRating: true, profileViews: true } } },
-      orderBy: { createdAt: 'desc' }
-    });
-    res.json(users);
-  } catch (e) { res.status(400).json({ error: "Erreur liste users" }); }
-});
+// (routes admin déjà définies plus haut — doublons supprimés pour éviter la charge inutile)
 
 app.get("/admin/stats", async (req, res) => {
   try {
