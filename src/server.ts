@@ -206,7 +206,7 @@ app.get("/users/:id", async (req, res) => {
 app.put("/users/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, prenom, date_naissance, telephone, city, region, department, bio, websiteUrl, types, specialties, avatarUrl, photoUrl1, photoUrl2, photoUrl3, photoUrl4, photoUrl5, photoUrl6, videoUrl1, videoUrl2, age, priceClip, priceStudio, priceMix, priceInstrumental, pricePhoto, address, siret, customService, customPrice } = req.body;
+    const { name, prenom, date_naissance, telephone, city, region, department, bio, websiteUrl, types, specialties, avatarUrl, photoUrl1, photoUrl2, photoUrl3, photoUrl4, photoUrl5, photoUrl6, videoUrl1, videoUrl2, videoUrl3, videoUrl4, videoUrl5, videoUrl6, age, priceClip, priceStudio, priceMix, priceInstrumental, pricePhoto, address, siret, customService, customPrice } = req.body;
 
     // Vérifier si l'utilisateur a un profil PRO
     const existingUser = await prisma.user.findUnique({ where: { id }, include: { proProfile: true } });
@@ -228,7 +228,7 @@ app.put("/users/:id", async (req, res) => {
           siret: siret || undefined,
           types: types ? JSON.stringify(types) : undefined,
           specialties: specialties ? JSON.stringify(specialties) : undefined,
-          photoUrl1, photoUrl2, photoUrl3, photoUrl4, photoUrl5, photoUrl6, videoUrl1, videoUrl2,
+          photoUrl1, photoUrl2, photoUrl3, photoUrl4, photoUrl5, photoUrl6, videoUrl1, videoUrl2, videoUrl3, videoUrl4, videoUrl5, videoUrl6,
           priceClip: priceClip ? Number(priceClip) : undefined,
           priceStudio: priceStudio ? Number(priceStudio) : undefined,
           priceMix: priceMix ? Number(priceMix) : undefined,
