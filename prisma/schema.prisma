@@ -72,6 +72,10 @@ model ProProfile {
   photoUrl6     String?
   videoUrl1     String?
   videoUrl2     String?
+  videoUrl3     String?
+  videoUrl4     String?
+  videoUrl5     String?
+  videoUrl6     String?
 
   // Tarifs par prestation
   priceClip           Int?
