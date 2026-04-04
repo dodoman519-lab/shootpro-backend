@@ -562,6 +562,28 @@ app.get("/bookings/user/:userId", async (req, res) => {
   } catch (e) { res.status(400).json({ error: "Erreur réservations" }); }
 });
 
+app.delete("/bookings/:id", async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const booking = await prisma.booking.findUnique({ where: { id: bookingId }, include: { proProfile: { include: { user: true } }, client: true, availability: true } });
+    if (booking) {
+      await prisma.availability.update({ where: { id: booking.availabilityId }, data: { isBooked: false } });
+      await prisma.booking.delete({ where: { id: bookingId } });
+      
+      // Notification au client éventuelle ? Optionnel.
+      await prisma.notification.create({
+        data: {
+          userId: booking.clientId,
+          type: 'BOOKING',
+          message: `Votre réservation a été annulée par le professionnel.`,
+          link: '/account'
+        }
+      }).catch(() => {});
+    }
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(400).json({ error: "Erreur annulation" }); }
+});
+
 // ────────────────────────────────────────────
 // STAGES
 // ────────────────────────────────────────────
