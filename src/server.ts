@@ -531,7 +531,23 @@ app.post("/bookings", async (req, res) => {
   try {
     const { clientId, proProfileId, availabilityId, note } = req.body;
     const booking = await prisma.booking.create({ data: { clientId, proProfileId, availabilityId, note } });
-    await prisma.availability.update({ where: { id: availabilityId }, data: { isBooked: true } });
+    const slot = await prisma.availability.update({ where: { id: availabilityId }, data: { isBooked: true } });
+    
+    // Notification au professionnel
+    const client = await prisma.user.findUnique({ where: { id: clientId } });
+    const pro = await prisma.proProfile.findUnique({ where: { id: proProfileId }, include: { user: true } });
+    if (client && pro && pro.user) {
+        const dateStr = new Date(slot.date + 'T12:00:00').toLocaleDateString('fr-FR');
+        await prisma.notification.create({
+            data: {
+                userId: pro.user.id,
+                type: 'BOOKING',
+                message: `Nouvelle réservation de ${client.name} pour le ${dateStr}`,
+                link: '/agenda'
+            }
+        }).catch(() => {});
+    }
+
     res.json(booking);
   } catch (e) { console.error(e); res.status(400).json({ error: "Erreur réservation" }); }
 });
