@@ -1,0 +1,223 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  password     String
+  name         String
+  role         String    @default("CLIENT")
+  age          Int?
+  avatarUrl    String?
+  department   String?
+  city         String?
+  address      String?
+  siret        String?   // numéro SIRET (optionnel)
+  isOnline     Boolean   @default(false)
+  lastSeen     DateTime?
+  fcmToken     String?   // Firebase Cloud Messaging token
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  proProfile     ProProfile?
+  reviews        Review[]        @relation("UserReviews")
+  clientChats    ChatRoom[]      @relation("ClientChats")
+  proChats       ChatRoom[]      @relation("ProChats")
+  gearListings   GearListing[]
+  sentContracts  Contract[]      @relation("SentContracts")
+  recvContracts  Contract[]      @relation("ReceivedContracts")
+  bookings       Booking[]
+  notifications  Notification[]
+}
+
+model ProProfile {
+  id            String  @id @default(cuid())
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String  @unique
+  level         String  @default("BEGINNER")
+  types         String  @default("[]")
+  specialties   String  @default("[]")
+  bio           String?
+  websiteUrl    String?
+  siret         String?
+  isCertified   Boolean @default(false)
+  city          String
+  department    String?
+  region        String
+  country       String  @default("France")
+  latitude      Float?
+  longitude     Float?
+  avgRating     Float   @default(0)
+  likesCount    Int     @default(0)
+  profileViews  Int     @default(0)
+  completedJobs Int     @default(0)
+  photoUrl1     String?  // URL ou base64
+  photoUrl2     String?
+  photoUrl3     String?
+  videoUrl1     String?
+  videoUrl2     String?
+
+  // Tarifs par prestation
+  priceClip           Int?
+  priceStudio         Int?
+  priceMix            Int?
+  priceInstrumental   Int?
+  pricePhoto          Int?
+
+  createdAt     DateTime @default(now())
+
+  portfolioItems PortfolioItem[]
+  reviews        Review[]         @relation("ProReviews")
+  services       Service[]
+  availability   Availability[]
+  bookings       Booking[]
+}
+
+model PortfolioItem {
+  id           String     @id @default(cuid())
+  proProfile   ProProfile @relation(fields: [proProfileId], references: [id], onDelete: Cascade)
+  proProfileId String
+  title        String
+  imageUrl     String
+  createdAt    DateTime   @default(now())
+}
+
+model Service {
+  id           String     @id @default(cuid())
+  proProfile   ProProfile @relation(fields: [proProfileId], references: [id], onDelete: Cascade)
+  proProfileId String
+  name         String
+  description  String?
+  basePrice    Int
+}
+
+model Review {
+  id           String     @id @default(cuid())
+  proProfile   ProProfile @relation("ProReviews", fields: [proProfileId], references: [id], onDelete: Cascade)
+  proProfileId String
+  author       User       @relation("UserReviews", fields: [authorId], references: [id], onDelete: Cascade)
+  authorId     String
+  rating       Int
+  comment      String?
+  createdAt    DateTime   @default(now())
+}
+
+model ChatRoom {
+  id        String    @id @default(cuid())
+  client    User      @relation("ClientChats", fields: [clientId], references: [id], onDelete: Cascade)
+  clientId  String
+  pro       User      @relation("ProChats", fields: [proId], references: [id], onDelete: Cascade)
+  proId     String
+  createdAt DateTime  @default(now())
+  messages  Message[]
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  chatRoom   ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  chatRoomId String
+  senderId   String
+  senderName String   @default("")
+  content    String
+  createdAt  DateTime @default(now())
+}
+
+model Contract {
+  id          String   @id @default(cuid())
+  pro         User     @relation("SentContracts", fields: [proId], references: [id], onDelete: Cascade)
+  proId       String
+  client      User     @relation("ReceivedContracts", fields: [clientId], references: [id], onDelete: Cascade)
+  clientId    String
+  title       String
+  description String
+  address     String
+  price       Float
+  eventDate   String?
+  status      String   @default("PENDING")
+  createdAt   DateTime @default(now())
+}
+
+model Availability {
+  id           String     @id @default(cuid())
+  proProfile   ProProfile @relation(fields: [proProfileId], references: [id], onDelete: Cascade)
+  proProfileId String
+  date         String
+  startTime    String?    // ex: "09:00"
+  endTime      String?    // ex: "17:00"
+  label        String?
+  isBooked     Boolean    @default(false)
+  bookings     Booking[]
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  type      String   // "MESSAGE", "BOOKING", "CONTRACT"
+  message   String
+  isRead    Boolean  @default(false)
+  link      String?  // URL de redirection
+  createdAt DateTime @default(now())
+}
+
+model Booking {
+  id             String       @id @default(cuid())
+  client         User         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId       String
+  proProfile     ProProfile   @relation(fields: [proProfileId], references: [id], onDelete: Cascade)
+  proProfileId   String
+  availability   Availability @relation(fields: [availabilityId], references: [id], onDelete: Cascade)
+  availabilityId String
+  status         String       @default("PENDING")
+  note           String?
+  createdAt      DateTime     @default(now())
+}
+
+model GearListing {
+  id          String   @id @default(cuid())
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  ownerId     String
+  title       String
+  description String?
+  pricePerDay Int?
+  priceSell   Int?
+  isForRent   Boolean  @default(false)
+  isForSale   Boolean  @default(false)
+  city        String
+  region      String
+  createdAt   DateTime @default(now())
+}
+
+model Internship {
+  id                 String   @id @default(cuid())
+  title              String
+  description        String
+  city               String
+  region             String
+  department         String?
+  startDate          String
+  endDate            String
+  conventionPdf      String?  // base64 du fichier PDF
+  conventionFileName String?
+  reportPdf          String?  // base64 du fichier PDF
+  reportFileName     String?
+  authorName         String
+  authorAge          Int?
+  createdAt          DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────
+// APP CONFIG : version APK + lien de téléchargement
+// ─────────────────────────────────────────────────────────
+model AppConfig {
+  id             String   @id @default(cuid())
+  key            String   @unique
+  value          String
+  updatedAt      DateTime @updatedAt
+}
