@@ -559,4 +559,5 @@ async function initAppConfig() {
 }
 
 initAppConfig();
-app.listen(4000, () => console.log("ShootPro API running on http://localhost:4000"));
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => console.log(`ShootPro API running on port ${PORT}`));
